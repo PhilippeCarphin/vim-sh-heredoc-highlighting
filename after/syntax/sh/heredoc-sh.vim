@@ -5,18 +5,34 @@ function! Def_heredoc(marker, contains)
     execute "syntax include @" . a:contains . " syntax/" . a:contains . ".vim"
     let b:current_syntax = s:bcs
 
-    for [matchGroup, quotation] in items({"heredoc" . a:marker . "Plain": "", "heredoc" . a:marker . "SingleQuote": "'", "heredoc" . a:marker . "DoubleQuote": "\""})
-        for [mgSuffix, startPrefix, endPrefix] in [["", "<<\\s*", "^"], ["Indented", "<<-\\s*", "^\\t*"]]
-            let mgName = matchGroup . mgSuffix
-            let start  = startPrefix . quotation . a:marker .quotation . "\\s*"
-            let end    = endPrefix   . a:marker . "$"
-            execute "syntax region shHereDocHL matchgroup=" . mgName . " start=+" . start . "+ end=+" . end . "+ contains=@" . a:contains
-            execute "hi def link " . mgName . " shRedir"
+
+    " Do all the ones with the marker on the same line, then the ones with the
+    " marker on the next line.
+    for [bsSuffix, startSuffix] in [["", ""], ["Bs", "\\\\\\_$\\_s*"]]
+        " Do 4 for each type of quote (none, single, double) except we only
+        " except we will skip two for for single and double quote so 4+2+2=8
+        " total iterations that do something.
+        for [matchGroup, quotation] in items({"heredoc" . a:marker . "Plain": "", "heredoc" . a:marker . "SingleQuote": "'", "heredoc" . a:marker . "DoubleQuote": "\""})
+            " Do without and with a backslash right before the start marker
+            " where the 'with' part being skipped for all the quoted ones
+            for [extra, startExtraSuffix] in [[ "", ""], ["Extra", "\\\\" ]]
+                if (matchGroup != ("heredoc" . a:marker . "Plain")) && (extra != "")
+                    continue
+                endif
+                " Do not indented and indented
+                for [mgSuffix, startPrefix, endPrefix] in [["", "<<\\s*", "^"], ["Indented", "<<-\\s*", "^\\t*"]]
+                    let mgName = matchGroup . extra . mgSuffix . bsSuffix
+                    let start  = startPrefix . startSuffix . startExtraSuffix . quotation . a:marker .quotation . "\\s*"
+                    let end    = endPrefix   . a:marker . "$"
+                    execute "syntax region shHereDocHL matchgroup=" . mgName . " start=+" . start . "+ end=+" . end . "+ contains=@" . a:contains
+                    execute "hi def link " . mgName . " shRedir"
+                endfor
+            endfor
         endfor
     endfor
 endfunction
 
-let g:heredocs_default = #{PYTHON: "python", LUA: "lua", PERL: "perl", SHELL: "sh", GNUPLOT: "gnuplot", JSON: "json"}
+let g:heredocs_default = #{PYTHON: "python", LUA: "lua", PERL: "perl", SHELL: "sh", GNUPLOT: "gnuplot", JSON: "json", VIM: "vim"}
 for [marker, contains] in items(extend(g:heredocs_default, get(g:, 'heredocs', {})))
     call Def_heredoc(marker, contains)
 endfor
@@ -24,3 +40,4 @@ endfor
 for container in ['shFunctionList', 'shCaseList', 'shCommandSublist', 'shPPSLeftList']
     execute "syn cluster " . container . " add=shHereDocHL"
 endfor
+" vim: ts=16 fdm=marker
